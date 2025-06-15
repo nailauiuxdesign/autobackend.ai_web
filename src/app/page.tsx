@@ -57,7 +57,9 @@ import {
 
 export default function Home() {
   const [framework, setFramework] = useState(DEFAULT_CONFIG.FRAMEWORK);
-  const [runtime, setRuntime] = useState(DEFAULT_CONFIG.RUNTIME);
+  const [runtime, setRuntime] = useState<'bun' | 'nodejs'>(
+    DEFAULT_CONFIG.RUNTIME
+  );
   const [deploymentTarget, setDeploymentTarget] = useState(
     DEFAULT_CONFIG.DEPLOYMENT_TARGET
   );
@@ -200,9 +202,54 @@ export default function Home() {
         const capitalizedResourceName =
           resourceName.charAt(0).toUpperCase() + resourceName.slice(1);
 
-        let routeFileContent = `// Routes for ${resourceName} - generated from ${pathKey}\nimport { Hono } from 'hono';\n`;
-        let controllerFileContent = `// Controllers for ${resourceName}\n`;
-        let serviceFileContent = `// Services for ${resourceName}\n`;
+        let routeFileContent = '';
+        let controllerFileContent = '';
+        let serviceFileContent = '';
+
+        if (typescript) {
+          routeFileContent = `// Routes for ${resourceName} - generated from ${pathKey}
+import { Hono } from 'hono';
+import * as ${capitalizedResourceName}Controller from '../controllers/${resourceName}.controller';
+
+const ${resourceName}Router = new Hono();
+
+`;
+          controllerFileContent = `import { Context } from 'hono';
+import * as ${capitalizedResourceName}Service from '../services/${resourceName}.service';
+
+// TODO: Add database imports if needed
+// import { db } from '../database/connection';
+
+`;
+          serviceFileContent = `// TODO: Add database imports if needed
+// import { db } from '../database/connection';
+
+// ${capitalizedResourceName} Service Layer
+// This service handles business logic for ${resourceName} operations
+
+`;
+        } else {
+          routeFileContent = `// Routes for ${resourceName} - generated from ${pathKey}
+const { Hono } = require('hono');
+const ${capitalizedResourceName}Controller = require('../controllers/${resourceName}.controller');
+
+const ${resourceName}Router = new Hono();
+
+`;
+          controllerFileContent = `const ${capitalizedResourceName}Service = require('../services/${resourceName}.service');
+
+// TODO: Add database requires if needed
+// const { db } = require('../database/connection');
+
+`;
+          serviceFileContent = `// TODO: Add database requires if needed
+// const { db } = require('../database/connection');
+
+// ${capitalizedResourceName} Service Layer
+// This service handles business logic for ${resourceName} operations
+
+`;
+        }
 
         const docEntry: any = {
           path: pathKey,
@@ -216,30 +263,110 @@ export default function Home() {
             operation.operationId || `${method}${capitalizedResourceName}`;
 
           if (typescript) {
-            routeFileContent += `import { ${operationId}Controller } from '../controllers/${resourceName}.controller';\n`;
-            controllerFileContent += `\nexport const ${operationId}Controller = async (c: any) => {\n  // TODO: Implement ${
-              operation.summary || operationId
-            }\n  // const data = await ${operationId}Service(c.req.param(), await c.req.json().catch(() => ({})));\n  return c.json({ message: '${
-              operation.summary || operationId
-            } placeholder' });\n};\n`;
-            serviceFileContent += `\nexport const ${operationId}Service = async (params?: any, body?: any) => {\n  // TODO: Implement business logic for ${
-              operation.summary || operationId
-            }\n  console.log('Service called for ${operationId}', { params, body });
-  return { data: 'service placeholder for ${operationId}' };\n};\n`;
+            controllerFileContent += `
+export const ${operationId}Controller = async (c: Context) => {
+  try {
+    // Extract parameters and body
+    const params = c.req.param();
+    const body = method !== 'get' && method !== 'delete' ? await c.req.json().catch(() => ({})) : undefined;
+    
+    // Call service layer
+    const result = await ${capitalizedResourceName}Service.${operationId}Service(params, body);
+    
+    // Return success response
+    return c.json({
+      success: true,
+      data: result,
+      message: '${operation.summary || operationId} completed successfully'
+    }, 200);
+  } catch (error) {
+    console.error('Error in ${operationId}Controller:', error);
+    return c.json({
+      success: false,
+      error: 'Internal server error',
+      message: 'Failed to ${operation.summary?.toLowerCase() || operationId}'
+    }, 500);
+  }
+};
+`;
+            serviceFileContent += `
+export const ${operationId}Service = async (params?: any, body?: any) => {
+  // TODO: Implement business logic for ${operation.summary || operationId}
+  console.log('Service called for ${operationId}', { params, body });
+  
+  // Example implementation - replace with actual business logic
+  try {
+    // Add your database operations here
+    // const result = await db.${resourceName}.${
+              method === 'post'
+                ? 'create'
+                : method === 'get'
+                ? 'findMany'
+                : method === 'put'
+                ? 'update'
+                : 'delete'
+            }(...);
+    
+    return {
+      message: '${operation.summary || operationId} service executed',
+      params,
+      body,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Service error:', error);
+    throw new Error('Service operation failed');
+  }
+};
+`;
           } else {
             // JS versions
-            routeFileContent += `// const { ${operationId}Controller } = require('../controllers/${resourceName}.controller');\n`;
-            controllerFileContent += `\nexports.${operationId}Controller = async (c) => {\n  // TODO: Implement ${
-              operation.summary || operationId
-            }\n  return c.json({ message: '${
-              operation.summary || operationId
-            } placeholder' });\n};\n`;
-            serviceFileContent += `\nexports.${operationId}Service = async (params, body) => {\n  // TODO: Implement business logic for ${
-              operation.summary || operationId
-            }\n  return { data: 'service placeholder for ${operationId}' };\n};\n`;
+            controllerFileContent += `
+exports.${operationId}Controller = async (c) => {
+  try {
+    const params = c.req.param();
+    const body = '${method}' !== 'get' && '${method}' !== 'delete' ? await c.req.json().catch(() => ({})) : undefined;
+    
+    const result = await ${capitalizedResourceName}Service.${operationId}Service(params, body);
+    
+    return c.json({
+      success: true,
+      data: result,
+      message: '${operation.summary || operationId} completed successfully'
+    }, 200);
+  } catch (error) {
+    console.error('Error in ${operationId}Controller:', error);
+    return c.json({
+      success: false,
+      error: 'Internal server error',
+      message: 'Failed to ${operation.summary?.toLowerCase() || operationId}'
+    }, 500);
+  }
+};
+`;
+            serviceFileContent += `
+exports.${operationId}Service = async (params, body) => {
+  console.log('Service called for ${operationId}', { params, body });
+  
+  try {
+    return {
+      message: '${operation.summary || operationId} service executed',
+      params,
+      body,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Service error:', error);
+    throw new Error('Service operation failed');
+  }
+};
+`;
           }
-          // Simplified route registration for Hono
-          routeFileContent += `\n// app.${method}('${pathKey}', ${operationId}Controller); // Example: app.get('/pets', listPetsController)
+          // Add route registration
+          routeFileContent += `${resourceName}Router.${method}('${pathKey.replace(
+            '/' + resourceName,
+            ''
+          )}', ${capitalizedResourceName}Controller.${operationId}Controller);
 `;
 
           docEntry.methods.push({
@@ -268,7 +395,11 @@ export default function Home() {
             type: 'file',
             content:
               routeFileContent +
-              '\n// You would typically initialize and export the router/app instance here or attach to a main app instance.',
+              `\n// Export the router\n${
+                typescript
+                  ? `export default ${resourceName}Router;`
+                  : `module.exports = ${resourceName}Router;`
+              }`,
           });
         }
         if (
@@ -301,55 +432,131 @@ export default function Home() {
       }
     }
 
+    // Generate route imports and registrations
+    const routeImports = Object.keys(parsedSpec.paths || {})
+      .map(path => {
+        const resourceName = path.split('/')[1] || 'default';
+        return typescript
+          ? `import ${resourceName}Router from './routes/${resourceName}.routes';`
+          : `const ${resourceName}Router = require('./routes/${resourceName}.routes');`;
+      })
+      .filter((value, index, self) => self.indexOf(value) === index) // Remove duplicates
+      .join('\n');
+
+    const routeRegistrations = Object.keys(parsedSpec.paths || {})
+      .map(path => {
+        const resourceName = path.split('/')[1] || 'default';
+        return `app.route('/api/${resourceName}', ${resourceName}Router);`;
+      })
+      .filter((value, index, self) => self.indexOf(value) === index) // Remove duplicates
+      .join('\n');
+
     const srcFolderChildren: FileSystemNode[] = [
       {
         id: 'index.ts',
         name: `index.${typescript ? 'ts' : 'js'}`,
         type: 'file' as 'file',
-        content: `// Main application entry point for ${framework} on ${runtime}\nimport { Hono } from 'hono';\n${
-          typescript
-            ? "import { logger } from 'hono/logger';"
-            : "// const { logger } = require('hono/logger');"
-        }\n${
-          typescript
-            ? "import { cors } from 'hono/cors';"
-            : "// const { cors } = require('hono/cors');"
-        }\n\n${
-          typescript
-            ? 'const app = new Hono();'
-            : "const { Hono } = require('hono'); // Ensure Hono is available for JS\nconst app = new Hono();"
-        }\n
+        content: typescript
+          ? `import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { logger } from 'hono/logger';
+${routeImports}
+
+const app = new Hono();
+
 // Middleware
-app.use('*', logger());
 app.use('*', cors());
-
-// TODO: Import and use routes from ./routes folder
-// Example: import petRoutes from './routes/pets.routes';
-// app.route('/api/v1/pets', petRoutes);
-
-${
-  generateDocs
-    ? '// Documentation endpoint (if enabled)\napp.get("/docs", (c) => c.html("<h1>API Documentation</h1><p>Generated documentation will appear here. (Details in Documentation tab)</p>"))\n'
-    : ''
-}
+app.use('*', logger());
 
 // Health check
 app.get('/', (c) => {
-  return c.json({
-    status: 'ok',
-    message: 'API is running',
-    version: parsedSpec?.info?.version || '1.0.0',
+  return c.json({ 
+    message: 'API is running', 
+    timestamp: new Date().toISOString(),
+    version: '${parsedSpec?.info?.version || '1.0.0'}',
     framework: '${framework}',
     runtime: '${runtime}',
+    endpoints: {
+      health: '/',
+      docs: '/docs'
+    }
   });
 });
 
-// Not found handler
+// API Routes
+${routeRegistrations}
+
+${
+  generateDocs
+    ? `// Documentation endpoint
+app.get('/docs', (c) => {
+  return c.html('<h1>API Documentation</h1><p>Generated documentation will appear here.</p>');
+});`
+    : ''
+}
+
+// 404 handler
 app.notFound((c) => {
-  return c.json({ status: 'error', message: 'Not Found'}, 404);
+  return c.json({ error: 'Not Found', message: 'The requested endpoint does not exist' }, 404);
 });
 
-${typescript ? 'export default app;' : '// module.exports = app;'}`,
+// Error handler
+app.onError((err, c) => {
+  console.error('Unhandled error:', err);
+  return c.json({ error: 'Internal Server Error', message: 'Something went wrong' }, 500);
+});
+
+export default app;`
+          : `const { Hono } = require('hono');
+const { cors } = require('hono/cors');
+const { logger } = require('hono/logger');
+${routeImports}
+
+const app = new Hono();
+
+// Middleware
+app.use('*', cors());
+app.use('*', logger());
+
+// Health check
+app.get('/', (c) => {
+  return c.json({ 
+    message: 'API is running', 
+    timestamp: new Date().toISOString(),
+    version: '${parsedSpec?.info?.version || '1.0.0'}',
+    framework: '${framework}',
+    runtime: '${runtime}',
+    endpoints: {
+      health: '/',
+      docs: '/docs'
+    }
+  });
+});
+
+// API Routes
+${routeRegistrations}
+
+${
+  generateDocs
+    ? `// Documentation endpoint
+app.get('/docs', (c) => {
+  return c.html('<h1>API Documentation</h1><p>Generated documentation will appear here.</p>');
+});`
+    : ''
+}
+
+// 404 handler
+app.notFound((c) => {
+  return c.json({ error: 'Not Found', message: 'The requested endpoint does not exist' }, 404);
+});
+
+// Error handler
+app.onError((err, c) => {
+  console.error('Unhandled error:', err);
+  return c.json({ error: 'Internal Server Error', message: 'Something went wrong' }, 500);
+});
+
+module.exports = app;`,
       },
     ];
     if (routesFolder.children && routesFolder.children.length > 0)
@@ -370,51 +577,236 @@ ${typescript ? 'export default app;' : '// module.exports = app;'}`,
       children: srcFolderChildren,
     });
 
+    // Generate package.json
+    const packageJson = {
+      name:
+        parsedSpec?.info?.title?.toLowerCase().replace(/\s+/g, '-') ||
+        'generated-api',
+      version: parsedSpec?.info?.version || '1.0.0',
+      description:
+        parsedSpec?.info?.description ||
+        'Generated API backend using Hono framework',
+      main: `src/index.${typescript ? 'ts' : 'js'}`,
+      type: typescript ? undefined : 'commonjs',
+      scripts: {
+        start: typescript ? 'tsx src/index.ts' : 'node src/index.js',
+        dev: typescript ? 'tsx watch src/index.ts' : 'nodemon src/index.js',
+        build: typescript ? 'tsc' : 'echo "No build step for JavaScript"',
+        test: 'echo "Error: no test specified" && exit 1',
+        lint: typescript ? 'eslint src/**/*.ts' : 'eslint src/**/*.js',
+        'type-check': typescript
+          ? 'tsc --noEmit'
+          : 'echo "No type checking for JavaScript"',
+      },
+      dependencies: {
+        hono: '^4.0.0',
+        ...(runtime === 'bun' ? {} : { '@hono/node-server': '^1.8.0' }),
+        ...(typescript ? {} : { nodemon: '^3.0.0' }),
+      },
+      ...(typescript
+        ? {
+            devDependencies: {
+              '@types/node': '^20.0.0',
+              typescript: '^5.0.0',
+              tsx: '^4.0.0',
+              eslint: '^8.0.0',
+              '@typescript-eslint/eslint-plugin': '^6.0.0',
+              '@typescript-eslint/parser': '^6.0.0',
+            },
+          }
+        : {
+            devDependencies: {
+              eslint: '^8.0.0',
+            },
+          }),
+      engines: {
+        node: '>=18.0.0',
+        ...(runtime === 'bun' ? { bun: '>=1.0.0' } : {}),
+      },
+      keywords: [
+        'api',
+        'backend',
+        'hono',
+        framework.toLowerCase(),
+        runtime.toLowerCase(),
+        ...(typescript ? ['typescript'] : ['javascript']),
+      ],
+      author: '',
+      license: 'MIT',
+    };
+
     // Add other standard files (package.json, README.md, tsconfig.json)
     newSampleFiles.push({
       id: 'package.json',
       name: 'package.json',
       type: 'file',
-      content: JSON.stringify(
-        {
-          name: `generated-${framework}-${
-            parsedSpec?.info?.title?.toLowerCase().replace(/\s+/g, '-') ||
-            'backend'
-          }`,
-          version: parsedSpec?.info?.version || '1.0.0',
-          main: `src/index.${typescript ? 'ts' : 'js'}`,
-          scripts: {
-            dev: `${
-              framework === 'hono' ? 'hono dev' : 'node --watch'
-            } src/index.${typescript ? 'ts' : 'js'}`,
-            start: `node dist/index.js`,
-            build: typescript ? 'tsc' : '# No build step for JS',
-            test: 'jest', // Placeholder
-          },
-          dependencies: {
-            hono: '^3.0.0', // Example, adjust based on framework
-            ...(typescript && { typescript: '^5.0.0' }),
-          },
-          devDependencies: {
-            ...(typescript && { '@types/node': '^20.0.0' }),
-            // Add testing framework dev deps if needed
-          },
-        },
-        null,
-        2
-      ),
+      content: JSON.stringify(packageJson, null, 2),
     });
     newSampleFiles.push({
       id: 'README.md',
       name: 'README.md',
       type: 'file',
-      content: `# ${
-        parsedSpec?.info?.title || 'Generated Backend'
-      }\n\nVersion: ${parsedSpec?.info?.version || '1.0.0'}\nDescription: ${
-        parsedSpec?.info?.description || 'Generated by Backend Generator UI.'
-      }\n\n- **Framework:** ${framework}\n- **Runtime:** ${runtime}\n- **TypeScript:** ${
-        typescript ? 'Yes' : 'No'
-      }\n\n## Getting Started\n...`,
+      content: `# ${parsedSpec?.info?.title || 'Generated API'}
+
+${
+  parsedSpec?.info?.description ||
+  'A generated backend API using Hono framework'
+}
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js >= 18.0.0${runtime === 'bun' ? '\n- Bun >= 1.0.0' : ''}
+- npm or yarn or pnpm${runtime === 'bun' ? ' or bun' : ''}
+
+### Installation
+
+1. Install dependencies:
+   \`\`\`bash
+   ${runtime === 'bun' ? 'bun install' : 'npm install'}
+   \`\`\`
+
+2. Start the development server:
+   \`\`\`bash
+   ${runtime === 'bun' ? 'bun run dev' : 'npm run dev'}
+   \`\`\`
+
+3. The API will be available at \`http://localhost:3000\`
+
+### Available Scripts
+
+- \`${
+        runtime === 'bun' ? 'bun run dev' : 'npm run dev'
+      }\` - Start development server with hot reload
+- \`${
+        runtime === 'bun' ? 'bun run start' : 'npm start'
+      }\` - Start production server
+- \`${runtime === 'bun' ? 'bun run build' : 'npm run build'}\` - ${
+        typescript ? 'Build TypeScript to JavaScript' : 'No build step required'
+      }
+- \`${runtime === 'bun' ? 'bun run test' : 'npm test'}\` - Run tests
+- \`${runtime === 'bun' ? 'bun run lint' : 'npm run lint'}\` - Run ESLint
+${
+  typescript
+    ? `- \`${
+        runtime === 'bun' ? 'bun run type-check' : 'npm run type-check'
+      }\` - Run TypeScript type checking`
+    : ''
+}
+
+## 📁 Project Structure
+
+\`\`\`
+${
+  parsedSpec?.info?.title?.toLowerCase().replace(/\s+/g, '-') || 'generated-api'
+}/
+├── src/
+│   ├── index.${typescript ? 'ts' : 'js'}          # Application entry point
+│   ├── routes/           # API route definitions
+│   ├── controllers/      # Request handlers
+│   ├── services/         # Business logic
+│   ├── models/           # Data models${
+        typescript ? ' (TypeScript interfaces)' : ''
+      }
+│   └── middleware/       # Custom middleware
+├── package.json
+├── README.md
+${typescript ? '├── tsconfig.json         # TypeScript configuration' : ''}
+└── .gitignore
+\`\`\`
+
+## 🛠 Technology Stack
+
+- **Framework**: ${framework}
+- **Runtime**: ${runtime}
+- **Language**: ${typescript ? 'TypeScript' : 'JavaScript'}
+- **Web Framework**: Hono
+- **API Specification**: OpenAPI 3.0
+
+## 📖 API Documentation
+
+${
+  generateDocs
+    ? 'Visit `/docs` endpoint for interactive API documentation.'
+    : 'API documentation can be generated based on the OpenAPI specification.'
+}
+
+### Health Check
+
+\`\`\`bash
+curl http://localhost:3000/
+\`\`\`
+
+### Available Endpoints
+
+${Object.keys(parsedSpec?.paths || {})
+  .map(path => {
+    const methods = Object.keys(parsedSpec.paths[path] || {});
+    return `- \`${methods.map(m => m.toUpperCase()).join(', ')} ${path}\``;
+  })
+  .join('\n')}
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Create a \`.env\` file in the root directory:
+
+\`\`\`env
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+
+# Database Configuration (if applicable)
+# DATABASE_URL=your_database_url
+
+# API Configuration
+API_VERSION=${parsedSpec?.info?.version || '1.0.0'}
+\`\`\`
+
+## 🚀 Deployment
+
+### Using Node.js
+
+1. Build the application (if TypeScript):
+   \`\`\`bash
+   ${runtime === 'bun' ? 'bun run build' : 'npm run build'}
+   \`\`\`
+
+2. Start the production server:
+   \`\`\`bash
+   ${runtime === 'bun' ? 'bun start' : 'npm start'}
+   \`\`\`
+
+### Using Docker
+
+\`\`\`dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+${typescript ? 'RUN npm run build' : ''}
+EXPOSE 3000
+CMD ["npm", "start"]
+\`\`\`
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests and linting
+5. Submit a pull request
+
+## 📝 License
+
+This project is licensed under the MIT License.
+
+---
+
+*Generated by AutoBackend.ai*
+`,
     });
     if (typescript) {
       newSampleFiles.push({
@@ -424,22 +816,296 @@ ${typescript ? 'export default app;' : '// module.exports = app;'}`,
         content: JSON.stringify(
           {
             compilerOptions: {
-              target: 'es2020',
-              module: 'commonjs',
+              target: 'ES2022',
+              module: 'ESNext',
+              moduleResolution: 'node',
               esModuleInterop: true,
-              forceConsistentCasingInFileNames: true,
+              allowSyntheticDefaultImports: true,
               strict: true,
               skipLibCheck: true,
+              forceConsistentCasingInFileNames: true,
               outDir: './dist',
+              rootDir: './src',
+              declaration: true,
+              declarationMap: true,
+              sourceMap: true,
+              resolveJsonModule: true,
+              isolatedModules: true,
+              noEmitOnError: true,
+              incremental: true,
+              tsBuildInfoFile: './dist/.tsbuildinfo',
             },
             include: ['src/**/*'],
-            exclude: ['node_modules', '**/*.test.ts'],
+            exclude: ['node_modules', 'dist', '**/*.test.ts', '**/*.spec.ts'],
+            ts_node: {
+              esm: true,
+            },
           },
           null,
           2
         ),
       });
     }
+
+    // Add .gitignore
+    newSampleFiles.push({
+      id: 'gitignore',
+      name: '.gitignore',
+      type: 'file',
+      content: `# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Grunt intermediate storage
+.grunt
+
+# Bower dependency directory
+bower_components
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons
+build/Release
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# parcel-bundler cache
+.cache
+.parcel-cache
+
+# Next.js build output
+.next
+out
+
+# Nuxt.js build / generate output
+.nuxt
+dist
+
+# Gatsby files
+.cache/
+public
+
+# Storybook build outputs
+.out
+.storybook-out
+
+# Temporary folders
+tmp/
+temp/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Directory for instrumented libs generated by jscoverage/JSCover
+lib-cov
+
+# Coverage directory used by tools like istanbul
+coverage
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Grunt intermediate storage
+.grunt
+
+# Bower dependency directory
+bower_components
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons
+build/Release
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Snowpack dependency directory
+web_modules/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+.env.test
+
+# parcel-bundler cache
+.cache
+.parcel-cache
+
+# Next.js build output
+.next
+
+# Nuxt.js build / generate output
+.nuxt
+dist
+
+# Gatsby files
+.cache/
+public
+
+# Storybook build outputs
+.out
+.storybook-out
+
+# Rollup.js default build output
+dist/
+
+# Uncomment the public line in if your project uses Gatsby and not Next.js
+# public
+
+# vuepress build output
+.vuepress/dist
+
+# Serverless directories
+.serverless/
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# yarn v2
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+`,
+    });
+
+    // Add .env.example
+    newSampleFiles.push({
+      id: 'env-example',
+      name: '.env.example',
+      type: 'file',
+      content: `# Server Configuration
+PORT=3000
+NODE_ENV=development
+
+# API Configuration
+API_VERSION=${parsedSpec?.info?.version || '1.0.0'}
+API_TITLE=${parsedSpec?.info?.title || 'Generated API'}
+
+# Database Configuration (uncomment and configure as needed)
+# DATABASE_URL=postgresql://username:password@localhost:5432/database_name
+# MONGODB_URI=mongodb://localhost:27017/database_name
+# REDIS_URL=redis://localhost:6379
+
+# Authentication (if applicable)
+# JWT_SECRET=your-super-secret-jwt-key
+# JWT_EXPIRES_IN=7d
+
+# External APIs (if applicable)
+# EXTERNAL_API_KEY=your-api-key
+# EXTERNAL_API_URL=https://api.example.com
+
+# Logging
+LOG_LEVEL=info
+
+# CORS Configuration
+CORS_ORIGIN=*
+
+# Rate Limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+`,
+    });
 
     setGeneratedBackend({
       files: newSampleFiles,
@@ -473,6 +1139,71 @@ ${typescript ? 'export default app;' : '// module.exports = app;'}`,
 
   const handleFileSelect = (file: FileSystemNode) => {
     setSelectedFile(file);
+  };
+
+  const handleDownloadZip = async () => {
+    if (!generatedBackend?.files || generatedBackend.files.length === 0) {
+      alert('No backend files to download. Please generate a backend first.');
+      return;
+    }
+
+    try {
+      // Dynamically import JSZip
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+
+      // Recursive function to add files to zip
+      const addFilesToZip = (nodes: FileSystemNode[], currentPath = '') => {
+        nodes.forEach(node => {
+          const fullPath = currentPath
+            ? `${currentPath}/${node.name}`
+            : node.name;
+
+          if (node.type === 'file' && node.content) {
+            zip.file(fullPath, node.content);
+          } else if (node.type === 'folder' && node.children) {
+            // Create folder and add its children
+            addFilesToZip(node.children, fullPath);
+          }
+        });
+      };
+
+      // Add all files to zip
+      addFilesToZip(generatedBackend.files);
+
+      // Generate zip file
+      const content = await zip.generateAsync({ type: 'blob' });
+
+      // Create download link
+      const url = window.URL.createObjectURL(content);
+      const link = document.createElement('a');
+      link.href = url;
+
+      // Generate filename based on API spec title or use default
+      let filename = 'generated-backend.zip';
+      try {
+        const parsedSpec = JSON.parse(apiSpec);
+        if (parsedSpec?.info?.title) {
+          const sanitizedTitle = parsedSpec.info.title
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '');
+          filename = `${sanitizedTitle}-backend.zip`;
+        }
+      } catch (e) {
+        // Use default filename if parsing fails
+      }
+
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error creating zip file:', error);
+      alert('Failed to create zip file. Please try again.');
+    }
   };
 
   return (
@@ -893,6 +1624,7 @@ ${typescript ? 'export default app;' : '// module.exports = app;'}`,
                   variant="default"
                   size="sm"
                   className="bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-700 hover:to-pink-600 text-white"
+                  onClick={handleDownloadZip}
                 >
                   <Download className="mr-2 h-4 w-4" /> {UI_TEXT.DOWNLOAD_ZIP}
                 </Button>

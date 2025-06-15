@@ -38,280 +38,37 @@ import {
   Folder as FolderIcon,
 } from 'lucide-react';
 import FileTree, { FileSystemNode } from '@/components/FileTree';
-const sampleApiSpecJSON = `{
-  "openapi": "3.0.0",
-  "info": {
-    "title": "Sample Pet Store API",
-    "version": "1.0.0",
-    "description": "A sample API to manage pets in a store"
-  },
-  "servers": [
-    {
-      "url": "http://localhost:3000/api/v1"
-    }
-  ],
-  "paths": {
-    "/pets": {
-      "get": {
-        "summary": "List all pets",
-        "operationId": "listPets",
-        "tags": ["pets"],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "How many items to return at one time (max 100)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "A paged array of pets",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Pet"
-                  }
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "unexpected error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "summary": "Create a pet",
-        "operationId": "createPet",
-        "tags": ["pets"],
-        "requestBody": {
-          "description": "Pet to add to the store",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PetInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Pet created successfully"
-          },
-          "default": {
-            "description": "unexpected error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pets/{petId}": {
-      "get": {
-        "summary": "Info for a specific pet",
-        "operationId": "showPetById",
-        "tags": ["pets"],
-        "parameters": [
-          {
-            "name": "petId",
-            "in": "path",
-            "required": true,
-            "description": "The id of the pet to retrieve",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Expected response to a valid request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Pet"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "unexpected error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "summary": "Update a pet",
-        "operationId": "updatePet",
-        "tags": ["pets"],
-        "parameters": [
-          {
-            "name": "petId",
-            "in": "path",
-            "required": true,
-            "description": "The id of the pet to update",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Pet object that needs to be updated",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PetInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Pet updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Pet"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "unexpected error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "summary": "Deletes a pet",
-        "operationId": "deletePet",
-        "tags": ["pets"],
-        "parameters": [
-          {
-            "name": "petId",
-            "in": "path",
-            "required": true,
-            "description": "The id of the pet to delete",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Pet deleted successfully"
-          },
-          "default": {
-            "description": "unexpected error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  },
-  "components": {
-    "schemas": {
-      "Pet": {
-        "type": "object",
-        "required": ["id", "name"],
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "readOnly": true
-          },
-          "name": {
-            "type": "string"
-          },
-          "tag": {
-            "type": "string"
-          },
-          "age": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Age of the pet in years"
-          }
-        }
-      },
-      "PetInput": {
-        "type": "object",
-        "required": ["name"],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "tag": {
-            "type": "string"
-          },
-          "age": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "Error": {
-        "type": "object",
-        "required": ["code", "message"],
-        "properties": {
-          "code": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "message": {
-            "type": "string"
-          }
-        }
-      }
-    }
-  }
-}`;
+import {
+  SAMPLE_API_SPEC_JSON,
+  DEFAULT_CONFIG,
+  FRAMEWORK_OPTIONS,
+  RUNTIME_OPTIONS,
+  DEPLOYMENT_OPTIONS,
+  UI_TEXT,
+  ERROR_MESSAGES,
+  CODE_TEMPLATES,
+  HTTP_METHOD_COLORS,
+  TYPESCRIPT_CONFIG,
+  DEPENDENCIES,
+  SCRIPTS,
+  FILE_EXTENSIONS,
+  DEFAULTS,
+} from '@/constants';
 
 export default function Home() {
-  const [framework, setFramework] = useState('hono');
-  const [runtime, setRuntime] = useState('nodejs');
-  const [deploymentTarget, setDeploymentTarget] = useState('vercel');
-  const [typescript, setTypeScript] = useState(true);
-  const [inputValidation, setInputValidation] = useState(true);
-  const [generateDocs, setGenerateDocs] = useState(true);
-  const [apiSpec, setApiSpec] = useState(sampleApiSpecJSON); // Prefill with sample JSON
+  const [framework, setFramework] = useState(DEFAULT_CONFIG.FRAMEWORK);
+  const [runtime, setRuntime] = useState(DEFAULT_CONFIG.RUNTIME);
+  const [deploymentTarget, setDeploymentTarget] = useState(
+    DEFAULT_CONFIG.DEPLOYMENT_TARGET
+  );
+  const [typescript, setTypeScript] = useState(DEFAULT_CONFIG.TYPESCRIPT);
+  const [inputValidation, setInputValidation] = useState(
+    DEFAULT_CONFIG.INPUT_VALIDATION
+  );
+  const [generateDocs, setGenerateDocs] = useState(
+    DEFAULT_CONFIG.GENERATE_DOCS
+  );
+  const [apiSpec, setApiSpec] = useState(SAMPLE_API_SPEC_JSON); // Prefill with sample JSON
   const [generatedBackend, setGeneratedBackend] = useState<any>(null);
   const [selectedFile, setSelectedFile] = useState<FileSystemNode | null>(null);
 
@@ -330,12 +87,11 @@ export default function Home() {
     try {
       parsedSpec = JSON.parse(apiSpec);
     } catch (jsonError) {
-      console.error('Failed to parse API Spec as JSON:', jsonError);
+      console.error(ERROR_MESSAGES.PARSE_ERROR, jsonError);
       setGeneratedBackend({
         files: [],
-        projectStructure:
-          'Error: Invalid API Specification. Please provide valid JSON.',
         documentation: [],
+        error: ERROR_MESSAGES.INVALID_JSON,
       });
       return;
     }
@@ -347,12 +103,11 @@ export default function Home() {
       !parsedSpec.components ||
       !parsedSpec.components.schemas
     ) {
-      console.error('Invalid OpenAPI structure in parsed spec.');
+      console.error(ERROR_MESSAGES.INVALID_STRUCTURE);
       setGeneratedBackend({
         files: [],
-        projectStructure:
-          'Error: API Specification must be a valid OpenAPI v3.x structure.',
         documentation: [],
+        error: ERROR_MESSAGES.INVALID_OPENAPI,
       });
       return;
     }
@@ -686,28 +441,8 @@ ${typescript ? 'export default app;' : '// module.exports = app;'}`,
       });
     }
 
-    const generateProjectStructure = (
-      nodes: FileSystemNode[],
-      indent = 0
-    ): string => {
-      let structure = '';
-      nodes.forEach(node => {
-        structure +=
-          '  '.repeat(indent) +
-          (node.type === 'folder' ? '📁 ' : '📄 ') +
-          node.name +
-          '\n';
-        if (node.type === 'folder' && node.children) {
-          structure += generateProjectStructure(node.children, indent + 1);
-        }
-      });
-      return structure;
-    };
-
     setGeneratedBackend({
       files: newSampleFiles,
-      projectStructure: `Generated Project Structure (based on API Spec):
-${generateProjectStructure(newSampleFiles)}`,
       documentation: generateDocs ? generatedDocumentation : [],
     });
 
@@ -746,11 +481,10 @@ ${generateProjectStructure(newSampleFiles)}`,
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold tracking-tight lg:text-5xl bg-gradient-to-r from-purple-600 via-pink-500 to-red-500 bg-clip-text text-transparent">
-            Generate Hono Backend from API Specs
+            {UI_TEXT.PAGE_TITLE}
           </h1>
           <p className="mt-3 text-lg text-muted-foreground sm:mt-5 sm:text-xl">
-            Upload or paste your API documentation and get a fully functional
-            Node.js backend using the Hono framework in seconds.
+            {UI_TEXT.PAGE_DESCRIPTION}
           </p>
         </div>
 
@@ -758,7 +492,7 @@ ${generateProjectStructure(newSampleFiles)}`,
           {/* API Specification Section (takes 2/3 width on lg screens) */}
           <Card className="lg:col-span-2">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>API Specification</CardTitle>
+              <CardTitle>{UI_TEXT.API_SPECIFICATION}</CardTitle>
               <div className="flex items-center gap-2">
                 {/* <Button variant="outline" size="sm"><Settings2 className="mr-2 h-4 w-4" />Save</Button> */}
                 <Button variant="ghost" size="sm">
@@ -768,10 +502,12 @@ ${generateProjectStructure(newSampleFiles)}`,
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="paste" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 mb-4">
-                  {/* <TabsTrigger value="upload">Upload File</TabsTrigger> */}
-                  <TabsTrigger value="paste">Paste JSON</TabsTrigger>
-                  {/* <TabsTrigger value="import">Import URL</TabsTrigger> */}
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="paste">{UI_TEXT.PASTE_JSON}</TabsTrigger>
+                  <TabsTrigger value="upload">
+                    {UI_TEXT.UPLOAD_FILE}
+                  </TabsTrigger>
+                  <TabsTrigger value="import">{UI_TEXT.IMPORT_URL}</TabsTrigger>
                 </TabsList>
                 <TabsContent value="upload">
                   <div className="mt-2 flex justify-center rounded-lg border border-dashed border-gray-900/25 dark:border-gray-100/25 px-6 py-10 min-h-[200px] items-center">
@@ -805,7 +541,7 @@ ${generateProjectStructure(newSampleFiles)}`,
                   <textarea
                     rows={10}
                     className="block w-full rounded-md border-0 py-1.5 text-black shadow-sm ring-1 ring-inset ring-gray-300 px-2 py-2 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 bg-background"
-                    placeholder="Paste your JSON API specification here..."
+                    placeholder={UI_TEXT.PASTE_JSON_PLACEHOLDER}
                     value={apiSpec}
                     onChange={e => setApiSpec(e.target.value)}
                   />
@@ -827,44 +563,48 @@ ${generateProjectStructure(newSampleFiles)}`,
           {/* Configuration Section (takes 1/3 width on lg screens) */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Configuration</CardTitle>
+              <CardTitle>{UI_TEXT.CONFIGURATION}</CardTitle>
               <Button variant="ghost" size="sm">
                 Reset
               </Button>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="framework">Framework</Label>
-                <Select value={framework} onValueChange={setFramework}>
+                <Label htmlFor="framework">{UI_TEXT.FRAMEWORK}</Label>
+                <Select value={framework} onValueChange={setFramework as any}>
                   <SelectTrigger id="framework">
                     <SelectValue placeholder="Select framework" />
                   </SelectTrigger>
                   <SelectContent className="bg-white">
-                    <SelectItem value="hono">Hono</SelectItem>
-                    <SelectItem disabled value="express">
-                      Express.js (Coming soon)
-                    </SelectItem>
-                    <SelectItem disabled value="fastify">
-                      Fastify (Coming soon)
-                    </SelectItem>
+                    {FRAMEWORK_OPTIONS.map(option => (
+                      <SelectItem
+                        key={option.value}
+                        value={option.value}
+                        disabled={option.disabled}
+                      >
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="runtime">Runtime</Label>
-                <Select value={runtime} onValueChange={setRuntime}>
+                <Label htmlFor="runtime">{UI_TEXT.RUNTIME}</Label>
+                <Select value={runtime} onValueChange={setRuntime as any}>
                   <SelectTrigger id="runtime">
                     <SelectValue placeholder="Select runtime" />
                   </SelectTrigger>
                   <SelectContent className="bg-white">
-                    <SelectItem value="nodejs">Node.js</SelectItem>
-                    <SelectItem disabled value="deno">
-                      Deno (Coming soon)
-                    </SelectItem>
-                    <SelectItem disabled value="bun">
-                      Bun (Coming soon)
-                    </SelectItem>
+                    {RUNTIME_OPTIONS.map(option => (
+                      <SelectItem
+                        key={option.value}
+                        value={option.value}
+                        disabled={option.disabled}
+                      >
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -885,22 +625,22 @@ ${generateProjectStructure(newSampleFiles)}`,
               </div> */}
 
               <div>
-                <h4 className="text-sm font-medium mb-2">Features</h4>
+                <h4 className="text-sm font-medium mb-2">{UI_TEXT.FEATURES}</h4>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label
                       htmlFor="typescript"
                       className="flex flex-col space-y-1"
                     >
-                      <span>TypeScript</span>
+                      <span>{UI_TEXT.TYPESCRIPT}</span>
                       <span className="font-normal leading-snug text-muted-foreground">
-                        Generate TypeScript code
+                        {UI_TEXT.TYPESCRIPT_DESC}
                       </span>
                     </Label>
                     <Switch
                       id="typescript"
                       checked={typescript}
-                      onCheckedChange={setTypeScript}
+                      onCheckedChange={setTypeScript as any}
                     />
                   </div>
                   <div className="flex items-center justify-between">
@@ -908,15 +648,15 @@ ${generateProjectStructure(newSampleFiles)}`,
                       htmlFor="inputValidation"
                       className="flex flex-col space-y-1"
                     >
-                      <span>Input Validation</span>
+                      <span>{UI_TEXT.INPUT_VALIDATION}</span>
                       <span className="font-normal leading-snug text-muted-foreground">
-                        Add request validation
+                        {UI_TEXT.INPUT_VALIDATION_DESC}
                       </span>
                     </Label>
                     <Switch
                       id="inputValidation"
                       checked={inputValidation}
-                      onCheckedChange={setInputValidation}
+                      onCheckedChange={setInputValidation as any}
                     />
                   </div>
                   <div className="flex items-center justify-between">
@@ -924,15 +664,15 @@ ${generateProjectStructure(newSampleFiles)}`,
                       htmlFor="generateDocs"
                       className="flex flex-col space-y-1"
                     >
-                      <span>Documentation</span>
+                      <span>{UI_TEXT.DOCUMENTATION}</span>
                       <span className="font-normal leading-snug text-muted-foreground">
-                        Generate API docs
+                        {UI_TEXT.DOCUMENTATION_DESC}
                       </span>
                     </Label>
                     <Switch
                       id="generateDocs"
                       checked={generateDocs}
-                      onCheckedChange={setGenerateDocs}
+                      onCheckedChange={setGenerateDocs as any}
                     />
                   </div>
                 </div>
@@ -942,7 +682,7 @@ ${generateProjectStructure(newSampleFiles)}`,
                 className="w-full bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-700 hover:to-pink-600 text-white"
                 onClick={handleGenerateBackend}
               >
-                Generate Backend
+                {UI_TEXT.GENERATE_BACKEND}
               </Button>
             </CardContent>
           </Card>
@@ -954,7 +694,7 @@ ${generateProjectStructure(newSampleFiles)}`,
             <CardHeader className="flex flex-row items-center justify-between">
               <div className="flex items-center">
                 <Code className="mr-2 h-5 w-5" />
-                <CardTitle>Generated Backend</CardTitle>
+                <CardTitle>{UI_TEXT.GENERATED_BACKEND}</CardTitle>
               </div>
               <Button variant="outline" size="sm">
                 <Settings2 className="mr-2 h-4 w-4" />
@@ -966,15 +706,15 @@ ${generateProjectStructure(newSampleFiles)}`,
                 <TabsList className="grid w-full grid-cols-3 mb-4">
                   <TabsTrigger value="code-preview">
                     <Code className="mr-2 h-4 w-4" />
-                    Code Preview
+                    {UI_TEXT.CODE_PREVIEW}
                   </TabsTrigger>
                   <TabsTrigger value="project-structure">
                     <FolderTree className="mr-2 h-4 w-4" />
-                    Project Structure
+                    {UI_TEXT.PROJECT_STRUCTURE}
                   </TabsTrigger>
                   <TabsTrigger value="documentation">
                     <BookOpen className="mr-2 h-4 w-4" />
-                    Documentation
+                    {UI_TEXT.API_DOCUMENTATION}
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="code-preview">
@@ -1027,16 +767,21 @@ ${generateProjectStructure(newSampleFiles)}`,
                   </div>
                 </TabsContent>
                 <TabsContent
-                  value="projectStructure"
+                  value="project-structure"
                   className="p-4 border rounded-md bg-muted/20 min-h-[300px]"
                 >
                   <h3 className="text-lg font-semibold mb-2">
                     Project Structure
                   </h3>
-                  {generatedBackend?.projectStructure ? (
-                    <pre className="text-sm whitespace-pre-wrap break-all">
-                      {generatedBackend.projectStructure}
-                    </pre>
+                  {generatedBackend?.files &&
+                  generatedBackend.files.length > 0 ? (
+                    <div className="bg-background border rounded-md p-3 max-h-[400px] overflow-auto">
+                      <FileTree
+                        nodes={generatedBackend.files}
+                        onFileSelect={handleFileSelect}
+                        selectedFileId={selectedFile?.id}
+                      />
+                    </div>
                   ) : (
                     <p className="text-muted-foreground">
                       Generate a backend to see the project structure.
@@ -1072,15 +817,11 @@ ${generateProjectStructure(newSampleFiles)}`,
                                   className="ml-2 mt-1 border-l-2 pl-2 border-blue-500"
                                 >
                                   <span
-                                    className={`px-2 py-0.5 rounded-sm text-xs font-semibold ${
-                                      method.method === 'GET'
-                                        ? 'bg-green-100 text-green-700'
-                                        : method.method === 'POST'
-                                        ? 'bg-blue-100 text-blue-700'
-                                        : method.method === 'PUT'
-                                        ? 'bg-yellow-100 text-yellow-700'
-                                        : 'bg-red-100 text-red-700'
-                                    }`}
+                                    className={
+                                      HTTP_METHOD_COLORS[
+                                        method.method as keyof typeof HTTP_METHOD_COLORS
+                                      ] || 'bg-gray-100 text-gray-700'
+                                    }
                                   >
                                     {method.method}
                                   </span>
@@ -1089,7 +830,9 @@ ${generateProjectStructure(newSampleFiles)}`,
                                   </span>
                                   {method.requestBody && (
                                     <div className="mt-1 pl-2 text-xs">
-                                      <strong>Request Body:</strong>{' '}
+                                      <strong>
+                                        {UI_TEXT.REQUEST_BODY_LABEL}
+                                      </strong>{' '}
                                       {method.requestBody.description}
                                       {method.requestBody.content && (
                                         <pre className="mt-1 p-1 bg-muted/50 rounded text-xs overflow-auto">
@@ -1104,7 +847,7 @@ ${generateProjectStructure(newSampleFiles)}`,
                                   )}
                                   {method.responses && (
                                     <div className="mt-1 pl-2 text-xs">
-                                      <strong>Responses:</strong>
+                                      <strong>{UI_TEXT.RESPONSES_LABEL}</strong>
                                       {Object.entries(method.responses).map(
                                         ([status, resp]: [string, any]) => (
                                           <div key={status} className="mt-0.5">
@@ -1135,8 +878,7 @@ ${generateProjectStructure(newSampleFiles)}`,
                     </div>
                   ) : (
                     <p className="text-muted-foreground">
-                      Generate a backend with documentation enabled to see API
-                      docs.
+                      {UI_TEXT.GENERATE_DOCS_MESSAGE}
                     </p>
                   )}
                 </TabsContent>
@@ -1145,18 +887,18 @@ ${generateProjectStructure(newSampleFiles)}`,
             <CardFooter className="flex justify-between items-center border-t pt-4 mt-4">
               <div>
                 <Button variant="outline" size="sm" className="mr-2">
-                  <Copy className="mr-2 h-4 w-4" /> Copy Code
+                  <Copy className="mr-2 h-4 w-4" /> {UI_TEXT.COPY_CODE}
                 </Button>
                 <Button
                   variant="default"
                   size="sm"
                   className="bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-700 hover:to-pink-600 text-white"
                 >
-                  <Download className="mr-2 h-4 w-4" /> Download ZIP
+                  <Download className="mr-2 h-4 w-4" /> {UI_TEXT.DOWNLOAD_ZIP}
                 </Button>
               </div>
               <Button variant="outline" size="sm">
-                <Github className="mr-2 h-4 w-4" /> View on GitHub
+                <Github className="mr-2 h-4 w-4" /> {UI_TEXT.VIEW_ON_GITHUB}
               </Button>
             </CardFooter>
           </Card>

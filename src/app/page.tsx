@@ -73,8 +73,12 @@ export default function Home() {
   const [apiSpec, setApiSpec] = useState(SAMPLE_API_SPEC_JSON); // Prefill with sample JSON
   const [generatedBackend, setGeneratedBackend] = useState<any>(null);
   const [selectedFile, setSelectedFile] = useState<FileSystemNode | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const handleGenerateBackend = () => {
+  const handleGenerateBackend = async () => {
+    setIsGenerating(true);
+    setGeneratedBackend(null); // Clear previous results
+    
     console.log('Generating backend with:', {
       framework,
       runtime,
@@ -84,6 +88,9 @@ export default function Home() {
       generateDocs,
       // apiSpec - will be parsed below
     });
+    
+    // Simulate loading time for demo purposes
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
     let parsedSpec: any = null;
     try {
@@ -1127,15 +1134,17 @@ RATE_LIMIT_MAX_REQUESTS=100
       };
       setSelectedFile(findFirstFile(newSampleFiles));
     }
+    
+    setIsGenerating(false);
   };
 
-  // useEffect to call handleGenerateBackend on mount if apiSpec is prefilled
-  useEffect(() => {
-    if (apiSpec) {
-      handleGenerateBackend();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run once on mount
+  // Remove auto-generation on mount to allow for proper demo
+  // useEffect(() => {
+  //   if (apiSpec) {
+  //     handleGenerateBackend();
+  //   }
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, []); // Run once on mount
 
   const handleFileSelect = (file: FileSystemNode) => {
     setSelectedFile(file);
@@ -1422,15 +1431,37 @@ RATE_LIMIT_MAX_REQUESTS=100
                 size="lg"
                 className="w-full bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-700 hover:to-pink-600 text-white"
                 onClick={handleGenerateBackend}
+                disabled={isGenerating}
               >
-                {UI_TEXT.GENERATE_BACKEND}
+                {isGenerating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Generating...
+                  </>
+                ) : (
+                  UI_TEXT.GENERATE_BACKEND
+                )}
               </Button>
             </CardContent>
           </Card>
         </div>
 
+        {/* Loading State */}
+        {isGenerating && (
+          <Card className="mt-8">
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mb-4"></div>
+              <h3 className="text-lg font-semibold mb-2">Generating Your Backend...</h3>
+              <p className="text-muted-foreground text-center max-w-md">
+                Please wait while we create your custom backend based on your API specification. 
+                This may take a few moments.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Generated Backend Section - Conditionally Rendered */}
-        {generatedBackend && (
+        {!isGenerating && generatedBackend && (
           <Card className="mt-8">
             <CardHeader className="flex flex-row items-center justify-between">
               <div className="flex items-center">

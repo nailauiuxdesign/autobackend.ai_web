@@ -1,4 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+.# AutoBackend.AI - Web Frontend
+
+This is the web frontend for AutoBackend.AI, a hackathon project that automatically generates backend APIs using AI. Built with [Next.js](https://nextjs.org) and bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+
+## 🏆 Hackathon Project
+
+AutoBackend.AI is an innovative solution that leverages artificial intelligence to automatically generate backend APIs, reducing development time and complexity for developers.
+
+### Project Repositories
+
+- **Frontend (Web)**: [autobackend.ai_web](https://github.com/sheriax/autobackend.ai_web) - This repository
+- **Backend**: [autobackend.ai_backend](https://github.com/sheriax/autobackend.ai_backend) - The AI-powered backend service
+
+### Features
+
+- 🤖 AI-powered backend generation
+- 🚀 Fast API creation
+- 💻 Modern web interface
+- 🔧 Easy configuration and setup
+- 📱 Responsive design
+
+## 🛠️ Tech Stack
+
+- **Frontend**: Next.js, TypeScript, Tailwind CSS
+- **Backend**: Node.js, TypeScript
+- **AI Integration**: Custom AI models for code generation
 
 ## Getting Started
 

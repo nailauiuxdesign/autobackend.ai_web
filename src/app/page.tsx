@@ -1156,25 +1156,23 @@ RATE_LIMIT_MAX_REQUESTS=100
       return;
     }
 
-    // Alert the user that download functionality is not available
-    alert('Download functionality requires the JSZip package. Please install it with: npm install jszip');
-    console.log('Download attempted, but JSZip is not installed.');
-    
-    // Commented out JSZip implementation to fix build error
-    /*
     try {
-      // Dynamically import JSZip
-      const JSZip = (await import('jszip')).default;
+      // Dynamically import JSZip with proper error handling for Next.js
+      let JSZip;
+      try {
+        // Use dynamic import with explicit error handling
+        const jsZipModule = await import('jszip');
+        JSZip = jsZipModule.default;
+        console.log('JSZip imported successfully:', !!JSZip);
+      } catch (importError) {
+        console.error('Failed to import JSZip:', importError);
+        alert('Download functionality requires the JSZip package. Please ensure it is properly installed.');
+        return;
+      }
+      
       const zip = new JSZip();
-
-      console.log('JSZip imported successfully:', !!JSZip);
       console.log('Starting to add files to zip...');
-    */
 
-      // Return early to prevent execution of JSZip-dependent code
-      return;
-
-      /*
       // Recursive function to add files to zip
       const addFilesToZip = (nodes: FileSystemNode[], currentPath = '') => {
         nodes.forEach(node => {
@@ -1202,9 +1200,6 @@ RATE_LIMIT_MAX_REQUESTS=100
       const content = await zip.generateAsync({ type: 'blob' });
 
       // Create download link
-      */
-      
-      /*
       const url = window.URL.createObjectURL(content);
       const link = document.createElement('a');
       link.href = url;
@@ -1230,19 +1225,15 @@ RATE_LIMIT_MAX_REQUESTS=100
       document.body.appendChild(link);
       console.log('Triggering download...');
       link.click();
-      */
       
-      /*
       console.log('Download triggered successfully');
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      */
-    /*
+    
     } catch (error) {
       console.error('Error creating zip file:', error);
       alert('Failed to create zip file. Please try again.');
     }
-    */
   };
 
   return (

@@ -1152,6 +1152,9 @@ RATE_LIMIT_MAX_REQUESTS=100
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
 
+      console.log('JSZip imported successfully:', !!JSZip);
+      console.log('Starting to add files to zip...');
+
       // Recursive function to add files to zip
       const addFilesToZip = (nodes: FileSystemNode[], currentPath = '') => {
         nodes.forEach(node => {
@@ -1160,8 +1163,10 @@ RATE_LIMIT_MAX_REQUESTS=100
             : node.name;
 
           if (node.type === 'file' && node.content) {
+            console.log('Adding file:', fullPath);
             zip.file(fullPath, node.content);
           } else if (node.type === 'folder' && node.children) {
+            console.log('Processing folder:', fullPath);
             // Create folder and add its children
             addFilesToZip(node.children, fullPath);
           }
@@ -1169,7 +1174,9 @@ RATE_LIMIT_MAX_REQUESTS=100
       };
 
       // Add all files to zip
+      console.log('Files to process:', generatedBackend.files.length);
       addFilesToZip(generatedBackend.files);
+      console.log('Finished adding files, generating zip...');
 
       // Generate zip file
       const content = await zip.generateAsync({ type: 'blob' });
@@ -1195,9 +1202,12 @@ RATE_LIMIT_MAX_REQUESTS=100
         // Use default filename if parsing fails
       }
 
+      console.log('Download filename:', filename);
       link.download = filename;
       document.body.appendChild(link);
+      console.log('Triggering download...');
       link.click();
+      console.log('Download triggered successfully');
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (error) {

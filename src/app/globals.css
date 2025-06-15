@@ -1,23 +1,39 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --primary: #7C3AED; /* Example primary color */
-  --primary-foreground: #ffffff; /* Text on primary color */
+  --background: #fafafa;
+  --foreground: #374151;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
 
   /* Card styles */
   --card: #ffffff;
-  --card-foreground: #171717;
+  --card-foreground: #374151;
 
   /* Border color */
-  --border: #e5e7eb; /* gray-200 */
+  --border: #e5e7eb;
 
   /* Input fields */
-  --input: #e5e7eb; /* gray-200 for border */
+  --input: #d1d5db;
 
   /* Ring (focus) */
-  --ring: #9333ea; /* purple-600 */
+  --ring: #6366f1;
+
+  /* Muted colors for better contrast */
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  
+  /* Secondary colors */
+  --secondary: #f1f5f9;
+  --secondary-foreground: #475569;
+  
+  /* Accent colors */
+  --accent: #f8fafc;
+  --accent-foreground: #334155;
+  
+  /* Destructive colors */
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
 
   /* Radius */
   --radius: 0.5rem;
@@ -37,6 +53,15 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+/* Button cursor fix */
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 /* Custom scrollbar (optional, for aesthetics) */

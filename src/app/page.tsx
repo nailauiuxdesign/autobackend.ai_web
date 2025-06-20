@@ -54,6 +54,48 @@ import {
   FILE_EXTENSIONS,
   DEFAULTS,
 } from '@/constants';
+import axios from 'axios';
+import { marked } from 'marked';
+// types.ts
+export interface Endpoint {
+  path: string;
+  description: string;
+  methods: Method[];
+}
+
+export interface Method {
+  method: string; // e.g., "GET", "POST"
+  summary: string;
+  requestBody: RequestBody | null;
+  responses: {
+    [statusCode: string]: Response;
+  };
+}
+
+export interface RequestBody {
+  description: string;
+  content: Record<string, string>; // e.g., { title: "string", content: "string" }
+}
+
+export interface Response {
+  description: string;
+  content: Record<string, string> | Record<string, string>[]; // could be object or array
+}
+
+
+export function parseDocumentation(jsonString: string): Endpoint[] {
+  try {
+    const data = JSON.parse(jsonString);
+    if (!Array.isArray(data)) {
+      throw new Error("Invalid format: expected an array");
+    }
+    return data as Endpoint[];
+  } catch (error) {
+    console.error("Failed to parse documentation:", error);
+    return [];
+  }
+}
+
 
 export default function Home() {
   const [framework, setFramework] = useState(DEFAULT_CONFIG.FRAMEWORK);
@@ -76,1067 +118,102 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleGenerateBackend = async () => {
+    if (!apiSpec) {
+      alert('Please provide an API specification');
+      return;
+    }
+
     setIsGenerating(true);
     setGeneratedBackend(null); // Clear previous results
-    
-    console.log('Generating backend with:', {
-      framework,
-      runtime,
-      deploymentTarget,
-      typescript,
-      inputValidation,
-      generateDocs,
-      // apiSpec - will be parsed below
-    });
-    
-    // Simulate loading time for demo purposes
-    await new Promise(resolve => setTimeout(resolve, 3000));
 
-    let parsedSpec: any = null;
     try {
-      parsedSpec = JSON.parse(apiSpec);
-    } catch (jsonError) {
-      console.error(ERROR_MESSAGES.PARSE_ERROR, jsonError);
-      setGeneratedBackend({
-        files: [],
-        documentation: [],
-        error: ERROR_MESSAGES.INVALID_JSON,
-      });
-      return;
-    }
+      // Call the local API endpoint
+      const response = await axios.post('http://localhost:3000/generate', apiSpec);
 
-    if (
-      !parsedSpec ||
-      typeof parsedSpec !== 'object' ||
-      !parsedSpec.paths ||
-      !parsedSpec.components ||
-      !parsedSpec.components.schemas
-    ) {
-      console.error(ERROR_MESSAGES.INVALID_STRUCTURE);
-      setGeneratedBackend({
-        files: [],
-        documentation: [],
-        error: ERROR_MESSAGES.INVALID_OPENAPI,
-      });
-      return;
-    }
+      // Process the response
+      if (response.data.success) {
+        console.log(response.data);
+        const { metadata, files } = response.data;
 
-    const newSampleFiles: FileSystemNode[] = [];
-    const routesFolder: FileSystemNode = {
-      id: 'routes',
-      name: 'routes',
-      type: 'folder',
-      children: [],
-    };
-    const controllersFolder: FileSystemNode = {
-      id: 'controllers',
-      name: 'controllers',
-      type: 'folder',
-      children: [],
-    };
-    const modelsFolder: FileSystemNode = {
-      id: 'models',
-      name: 'models',
-      type: 'folder',
-      children: [],
-    };
-    const servicesFolder: FileSystemNode = {
-      id: 'services',
-      name: 'services',
-      type: 'folder',
-      children: [],
-    };
-    const middlewareFolder: FileSystemNode = {
-      id: 'middleware',
-      name: 'middleware',
-      type: 'folder',
-      children: [
-        {
-          id: 'auth.middleware.ts',
-          name: `auth.middleware.${typescript ? 'ts' : 'js'}`,
-          type: 'file',
-          content: `// Authentication middleware placeholder for ${framework}`,
-        },
-        {
-          id: 'validation.middleware.ts',
-          name: `validation.middleware.${typescript ? 'ts' : 'js'}`,
-          type: 'file',
-          content: `// Input validation middleware placeholder for ${framework}`,
-        },
-      ],
-    };
+        // Transform the files from the response into the FileSystemNode structure
+        const newSampleFiles: FileSystemNode[] = [];
 
-    const generatedDocumentation: any[] = [];
+        // Process the files from the response
+        for (const filePath of metadata.files) {
+          const fileContent = files[filePath];
+          const pathParts = filePath.split('/');
 
-    // Generate models from schemas
-    if (parsedSpec.components.schemas) {
-      for (const schemaName in parsedSpec.components.schemas) {
-        const schema = parsedSpec.components.schemas[schemaName];
-        let modelContent = `// Model for ${schemaName}\n`;
-        if (typescript) {
-          modelContent += `export interface ${schemaName} {\n`;
-          if (schema.properties) {
-            for (const propName in schema.properties) {
-              const prop = schema.properties[propName];
-              modelContent += `  ${propName}${
-                schema.required && schema.required.includes(propName) ? '' : '?'
-              }: ${prop.type === 'integer' ? 'number' : prop.type}; // ${
-                prop.description || ''
-              }\n`;
+          // Find or create parent folders
+          let currentLevel = newSampleFiles;
+          let currentPath = '';
+
+          for (let i = 0; i < pathParts.length - 1; i++) {
+            const part = pathParts[i];
+            currentPath = currentPath ? `${currentPath}/${part}` : part;
+
+            let folder = currentLevel.find(node => node.name === part && node.type === 'folder');
+
+            if (!folder) {
+              folder = {
+                id: currentPath,
+                name: part,
+                type: 'folder',
+                children: []
+              };
+              currentLevel.push(folder);
             }
+
+            currentLevel = folder.children || [];
           }
-          modelContent += `}\n`;
-        } else {
-          modelContent += `// JavaScript model definition for ${schemaName}\n// Properties: ${Object.keys(
-            schema.properties || {}
-          ).join(', ')}\n`;
+
+          // Add the file
+          const fileName = pathParts[pathParts.length - 1];
+          currentLevel.push({
+            id: filePath,
+            name: fileName,
+            type: 'file',
+            content: fileContent
+          });
         }
-        modelsFolder.children?.push({
-          id: `${schemaName}.model`,
-          name: `${schemaName}.model.${typescript ? 'ts' : 'js'}`,
-          type: 'file',
-          content: modelContent,
+        // console.log(response.data.files["parsedDocumentation.json"]);
+        // const parsedString = response.data.files["parsedDocumentation.json"];
+
+        // const endpoints = parseDocumentation(parsedString);
+
+        setGeneratedBackend({
+          files: newSampleFiles,
+          documentation: response.data.files["documentation.md"]  || [], // Extract documentation from the API response
+          documentationMarkdown: response.data.files["documentation.md"] // Extract markdown documentation
         });
+
+        if (newSampleFiles.length > 0) {
+          const findFirstFile = (nodes: FileSystemNode[]): FileSystemNode | null => {
+            for (const node of nodes) {
+              if (node.type === 'file') return node;
+              if (node.children) {
+                const found = findFirstFile(node.children);
+                if (found) return found;
+              }
+            }
+            return null;
+          };
+          setSelectedFile(findFirstFile(newSampleFiles));
+        }
+      } else {
+        alert('Failed to generate backend: ' + (response.data.error || 'Unknown error'));
       }
+    } catch (error) {
+      console.log(error);
+      console.error('Error generating backend:', error);
+      alert('Error generating backend. Please try again.');
+    } finally {
+      setIsGenerating(false);
     }
-
-    // Generate routes, controllers, services from paths
-    if (parsedSpec.paths) {
-      for (const pathKey in parsedSpec.paths) {
-        const pathData = parsedSpec.paths[pathKey];
-        const pathSegments = pathKey.replace(/^\/|\/$/g, '').split('/'); // /pets/{petId} -> ['pets', '{petId}']
-        const resourceName = pathSegments[0] || 'general'; // 'pets'
-        const capitalizedResourceName =
-          resourceName.charAt(0).toUpperCase() + resourceName.slice(1);
-
-        let routeFileContent = '';
-        let controllerFileContent = '';
-        let serviceFileContent = '';
-
-        if (typescript) {
-          routeFileContent = `// Routes for ${resourceName} - generated from ${pathKey}
-import { Hono } from 'hono';
-import * as ${capitalizedResourceName}Controller from '../controllers/${resourceName}.controller';
-
-const ${resourceName}Router = new Hono();
-
-`;
-          controllerFileContent = `import { Context } from 'hono';
-import * as ${capitalizedResourceName}Service from '../services/${resourceName}.service';
-
-// TODO: Add database imports if needed
-// import { db } from '../database/connection';
-
-`;
-          serviceFileContent = `// TODO: Add database imports if needed
-// import { db } from '../database/connection';
-
-// ${capitalizedResourceName} Service Layer
-// This service handles business logic for ${resourceName} operations
-
-`;
-        } else {
-          routeFileContent = `// Routes for ${resourceName} - generated from ${pathKey}
-const { Hono } = require('hono');
-const ${capitalizedResourceName}Controller = require('../controllers/${resourceName}.controller');
-
-const ${resourceName}Router = new Hono();
-
-`;
-          controllerFileContent = `const ${capitalizedResourceName}Service = require('../services/${resourceName}.service');
-
-// TODO: Add database requires if needed
-// const { db } = require('../database/connection');
-
-`;
-          serviceFileContent = `// TODO: Add database requires if needed
-// const { db } = require('../database/connection');
-
-// ${capitalizedResourceName} Service Layer
-// This service handles business logic for ${resourceName} operations
-
-`;
-        }
-
-        const docEntry: any = {
-          path: pathKey,
-          description: pathData.summary || `Endpoints for ${resourceName}`,
-          methods: [],
-        };
-
-        for (const method in pathData) {
-          const operation = pathData[method];
-          const operationId =
-            operation.operationId || `${method}${capitalizedResourceName}`;
-
-          if (typescript) {
-            controllerFileContent += `
-export const ${operationId}Controller = async (c: Context) => {
-  try {
-    // Extract parameters and body
-    const params = c.req.param();
-    const body = method !== 'get' && method !== 'delete' ? await c.req.json().catch(() => ({})) : undefined;
-    
-    // Call service layer
-    const result = await ${capitalizedResourceName}Service.${operationId}Service(params, body);
-    
-    // Return success response
-    return c.json({
-      success: true,
-      data: result,
-      message: '${operation.summary || operationId} completed successfully'
-    }, 200);
-  } catch (error) {
-    console.error('Error in ${operationId}Controller:', error);
-    return c.json({
-      success: false,
-      error: 'Internal server error',
-      message: 'Failed to ${operation.summary?.toLowerCase() || operationId}'
-    }, 500);
-  }
-};
-`;
-            serviceFileContent += `
-export const ${operationId}Service = async (params?: any, body?: any) => {
-  // TODO: Implement business logic for ${operation.summary || operationId}
-  console.log('Service called for ${operationId}', { params, body });
-  
-  // Example implementation - replace with actual business logic
-  try {
-    // Add your database operations here
-    // const result = await db.${resourceName}.${
-              method === 'post'
-                ? 'create'
-                : method === 'get'
-                ? 'findMany'
-                : method === 'put'
-                ? 'update'
-                : 'delete'
-            }(...);
-    
-    return {
-      message: '${operation.summary || operationId} service executed',
-      params,
-      body,
-      timestamp: new Date().toISOString()
-    };
-  } catch (error) {
-    console.error('Service error:', error);
-    throw new Error('Service operation failed');
-  }
-};
-`;
-          } else {
-            // JS versions
-            controllerFileContent += `
-exports.${operationId}Controller = async (c) => {
-  try {
-    const params = c.req.param();
-    const body = '${method}' !== 'get' && '${method}' !== 'delete' ? await c.req.json().catch(() => ({})) : undefined;
-    
-    const result = await ${capitalizedResourceName}Service.${operationId}Service(params, body);
-    
-    return c.json({
-      success: true,
-      data: result,
-      message: '${operation.summary || operationId} completed successfully'
-    }, 200);
-  } catch (error) {
-    console.error('Error in ${operationId}Controller:', error);
-    return c.json({
-      success: false,
-      error: 'Internal server error',
-      message: 'Failed to ${operation.summary?.toLowerCase() || operationId}'
-    }, 500);
-  }
-};
-`;
-            serviceFileContent += `
-exports.${operationId}Service = async (params, body) => {
-  console.log('Service called for ${operationId}', { params, body });
-  
-  try {
-    return {
-      message: '${operation.summary || operationId} service executed',
-      params,
-      body,
-      timestamp: new Date().toISOString()
-    };
-  } catch (error) {
-    console.error('Service error:', error);
-    throw new Error('Service operation failed');
-  }
-};
-`;
-          }
-          // Add route registration
-          routeFileContent += `${resourceName}Router.${method}('${pathKey.replace(
-            '/' + resourceName,
-            ''
-          )}', ${capitalizedResourceName}Controller.${operationId}Controller);
-`;
-
-          docEntry.methods.push({
-            method: method.toUpperCase(),
-            summary: operation.summary || 'No summary',
-            description: operation.description || '',
-            requestBody: operation.requestBody
-              ? {
-                  description: operation.requestBody.description,
-                  content: operation.requestBody.content,
-                }
-              : null,
-            responses: operation.responses,
-          });
-        }
-        generatedDocumentation.push(docEntry);
-
-        if (
-          !routesFolder.children?.find(
-            f => f.name === `${resourceName}.routes.${typescript ? 'ts' : 'js'}`
-          )
-        ) {
-          routesFolder.children?.push({
-            id: `${resourceName}.routes`,
-            name: `${resourceName}.routes.${typescript ? 'ts' : 'js'}`,
-            type: 'file',
-            content:
-              routeFileContent +
-              `\n// Export the router\n${
-                typescript
-                  ? `export default ${resourceName}Router;`
-                  : `module.exports = ${resourceName}Router;`
-              }`,
-          });
-        }
-        if (
-          !controllersFolder.children?.find(
-            f =>
-              f.name ===
-              `${resourceName}.controller.${typescript ? 'ts' : 'js'}`
-          )
-        ) {
-          controllersFolder.children?.push({
-            id: `${resourceName}.controller`,
-            name: `${resourceName}.controller.${typescript ? 'ts' : 'js'}`,
-            type: 'file',
-            content: controllerFileContent,
-          });
-        }
-        if (
-          !servicesFolder.children?.find(
-            f =>
-              f.name === `${resourceName}.service.${typescript ? 'ts' : 'js'}`
-          )
-        ) {
-          servicesFolder.children?.push({
-            id: `${resourceName}.service`,
-            name: `${resourceName}.service.${typescript ? 'ts' : 'js'}`,
-            type: 'file',
-            content: serviceFileContent,
-          });
-        }
-      }
-    }
-
-    // Generate route imports and registrations
-    const routeImports = Object.keys(parsedSpec.paths || {})
-      .map(path => {
-        const resourceName = path.split('/')[1] || 'default';
-        return typescript
-          ? `import ${resourceName}Router from './routes/${resourceName}.routes';`
-          : `const ${resourceName}Router = require('./routes/${resourceName}.routes');`;
-      })
-      .filter((value, index, self) => self.indexOf(value) === index) // Remove duplicates
-      .join('\n');
-
-    const routeRegistrations = Object.keys(parsedSpec.paths || {})
-      .map(path => {
-        const resourceName = path.split('/')[1] || 'default';
-        return `app.route('/api/${resourceName}', ${resourceName}Router);`;
-      })
-      .filter((value, index, self) => self.indexOf(value) === index) // Remove duplicates
-      .join('\n');
-
-    const srcFolderChildren: FileSystemNode[] = [
-      {
-        id: 'index.ts',
-        name: `index.${typescript ? 'ts' : 'js'}`,
-        type: 'file' as 'file',
-        content: typescript
-          ? `import { Hono } from 'hono';
-import { cors } from 'hono/cors';
-import { logger } from 'hono/logger';
-${routeImports}
-
-const app = new Hono();
-
-// Middleware
-app.use('*', cors());
-app.use('*', logger());
-
-// Health check
-app.get('/', (c) => {
-  return c.json({ 
-    message: 'API is running', 
-    timestamp: new Date().toISOString(),
-    version: '${parsedSpec?.info?.version || '1.0.0'}',
-    framework: '${framework}',
-    runtime: '${runtime}',
-    endpoints: {
-      health: '/',
-      docs: '/docs'
-    }
-  });
-});
-
-// API Routes
-${routeRegistrations}
-
-${
-  generateDocs
-    ? `// Documentation endpoint
-app.get('/docs', (c) => {
-  return c.html('<h1>API Documentation</h1><p>Generated documentation will appear here.</p>');
-});`
-    : ''
-}
-
-// 404 handler
-app.notFound((c) => {
-  return c.json({ error: 'Not Found', message: 'The requested endpoint does not exist' }, 404);
-});
-
-// Error handler
-app.onError((err, c) => {
-  console.error('Unhandled error:', err);
-  return c.json({ error: 'Internal Server Error', message: 'Something went wrong' }, 500);
-});
-
-export default app;`
-          : `const { Hono } = require('hono');
-const { cors } = require('hono/cors');
-const { logger } = require('hono/logger');
-${routeImports}
-
-const app = new Hono();
-
-// Middleware
-app.use('*', cors());
-app.use('*', logger());
-
-// Health check
-app.get('/', (c) => {
-  return c.json({ 
-    message: 'API is running', 
-    timestamp: new Date().toISOString(),
-    version: '${parsedSpec?.info?.version || '1.0.0'}',
-    framework: '${framework}',
-    runtime: '${runtime}',
-    endpoints: {
-      health: '/',
-      docs: '/docs'
-    }
-  });
-});
-
-// API Routes
-${routeRegistrations}
-
-${
-  generateDocs
-    ? `// Documentation endpoint
-app.get('/docs', (c) => {
-  return c.html('<h1>API Documentation</h1><p>Generated documentation will appear here.</p>');
-});`
-    : ''
-}
-
-// 404 handler
-app.notFound((c) => {
-  return c.json({ error: 'Not Found', message: 'The requested endpoint does not exist' }, 404);
-});
-
-// Error handler
-app.onError((err, c) => {
-  console.error('Unhandled error:', err);
-  return c.json({ error: 'Internal Server Error', message: 'Something went wrong' }, 500);
-});
-
-module.exports = app;`,
-      },
-    ];
-    if (routesFolder.children && routesFolder.children.length > 0)
-      srcFolderChildren.push(routesFolder);
-    if (controllersFolder.children && controllersFolder.children.length > 0)
-      srcFolderChildren.push(controllersFolder);
-    if (modelsFolder.children && modelsFolder.children.length > 0)
-      srcFolderChildren.push(modelsFolder);
-    if (servicesFolder.children && servicesFolder.children.length > 0)
-      srcFolderChildren.push(servicesFolder);
-    if (middlewareFolder.children && middlewareFolder.children.length > 0)
-      srcFolderChildren.push(middlewareFolder);
-
-    newSampleFiles.push({
-      id: 'src',
-      name: 'src',
-      type: 'folder',
-      children: srcFolderChildren,
-    });
-
-    // Generate package.json
-    const packageJson = {
-      name:
-        parsedSpec?.info?.title?.toLowerCase().replace(/\s+/g, '-') ||
-        'generated-api',
-      version: parsedSpec?.info?.version || '1.0.0',
-      description:
-        parsedSpec?.info?.description ||
-        'Generated API backend using Hono framework',
-      main: `src/index.${typescript ? 'ts' : 'js'}`,
-      type: typescript ? undefined : 'commonjs',
-      scripts: {
-        start: typescript ? 'tsx src/index.ts' : 'node src/index.js',
-        dev: typescript ? 'tsx watch src/index.ts' : 'nodemon src/index.js',
-        build: typescript ? 'tsc' : 'echo "No build step for JavaScript"',
-        test: 'echo "Error: no test specified" && exit 1',
-        lint: typescript ? 'eslint src/**/*.ts' : 'eslint src/**/*.js',
-        'type-check': typescript
-          ? 'tsc --noEmit'
-          : 'echo "No type checking for JavaScript"',
-      },
-      dependencies: {
-        hono: '^4.0.0',
-        ...(runtime === 'bun' ? {} : { '@hono/node-server': '^1.8.0' }),
-        ...(typescript ? {} : { nodemon: '^3.0.0' }),
-      },
-      ...(typescript
-        ? {
-            devDependencies: {
-              '@types/node': '^20.0.0',
-              typescript: '^5.0.0',
-              tsx: '^4.0.0',
-              eslint: '^8.0.0',
-              '@typescript-eslint/eslint-plugin': '^6.0.0',
-              '@typescript-eslint/parser': '^6.0.0',
-            },
-          }
-        : {
-            devDependencies: {
-              eslint: '^8.0.0',
-            },
-          }),
-      engines: {
-        node: '>=18.0.0',
-        ...(runtime === 'bun' ? { bun: '>=1.0.0' } : {}),
-      },
-      keywords: [
-        'api',
-        'backend',
-        'hono',
-        framework.toLowerCase(),
-        runtime.toLowerCase(),
-        ...(typescript ? ['typescript'] : ['javascript']),
-      ],
-      author: '',
-      license: 'MIT',
-    };
-
-    // Add other standard files (package.json, README.md, tsconfig.json)
-    newSampleFiles.push({
-      id: 'package.json',
-      name: 'package.json',
-      type: 'file',
-      content: JSON.stringify(packageJson, null, 2),
-    });
-    newSampleFiles.push({
-      id: 'README.md',
-      name: 'README.md',
-      type: 'file',
-      content: `# ${parsedSpec?.info?.title || 'Generated API'}
-
-${
-  parsedSpec?.info?.description ||
-  'A generated backend API using Hono framework'
-}
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Node.js >= 18.0.0${runtime === 'bun' ? '\n- Bun >= 1.0.0' : ''}
-- npm or yarn or pnpm${runtime === 'bun' ? ' or bun' : ''}
-
-### Installation
-
-1. Install dependencies:
-   \`\`\`bash
-   ${runtime === 'bun' ? 'bun install' : 'npm install'}
-   \`\`\`
-
-2. Start the development server:
-   \`\`\`bash
-   ${runtime === 'bun' ? 'bun run dev' : 'npm run dev'}
-   \`\`\`
-
-3. The API will be available at \`http://localhost:3000\`
-
-### Available Scripts
-
-- \`${
-        runtime === 'bun' ? 'bun run dev' : 'npm run dev'
-      }\` - Start development server with hot reload
-- \`${
-        runtime === 'bun' ? 'bun run start' : 'npm start'
-      }\` - Start production server
-- \`${runtime === 'bun' ? 'bun run build' : 'npm run build'}\` - ${
-        typescript ? 'Build TypeScript to JavaScript' : 'No build step required'
-      }
-- \`${runtime === 'bun' ? 'bun run test' : 'npm test'}\` - Run tests
-- \`${runtime === 'bun' ? 'bun run lint' : 'npm run lint'}\` - Run ESLint
-${
-  typescript
-    ? `- \`${
-        runtime === 'bun' ? 'bun run type-check' : 'npm run type-check'
-      }\` - Run TypeScript type checking`
-    : ''
-}
-
-## 📁 Project Structure
-
-\`\`\`
-${
-  parsedSpec?.info?.title?.toLowerCase().replace(/\s+/g, '-') || 'generated-api'
-}/
-├── src/
-│   ├── index.${typescript ? 'ts' : 'js'}          # Application entry point
-│   ├── routes/           # API route definitions
-│   ├── controllers/      # Request handlers
-│   ├── services/         # Business logic
-│   ├── models/           # Data models${
-        typescript ? ' (TypeScript interfaces)' : ''
-      }
-│   └── middleware/       # Custom middleware
-├── package.json
-├── README.md
-${typescript ? '├── tsconfig.json         # TypeScript configuration' : ''}
-└── .gitignore
-\`\`\`
-
-## 🛠 Technology Stack
-
-- **Framework**: ${framework}
-- **Runtime**: ${runtime}
-- **Language**: ${typescript ? 'TypeScript' : 'JavaScript'}
-- **Web Framework**: Hono
-- **API Specification**: OpenAPI 3.0
-
-## 📖 API Documentation
-
-${
-  generateDocs
-    ? 'Visit `/docs` endpoint for interactive API documentation.'
-    : 'API documentation can be generated based on the OpenAPI specification.'
-}
-
-### Health Check
-
-\`\`\`bash
-curl http://localhost:3000/
-\`\`\`
-
-### Available Endpoints
-
-${Object.keys(parsedSpec?.paths || {})
-  .map(path => {
-    const methods = Object.keys(parsedSpec.paths[path] || {});
-    return `- \`${methods.map(m => m.toUpperCase()).join(', ')} ${path}\``;
-  })
-  .join('\n')}
-
-## 🔧 Configuration
-
-### Environment Variables
-
-Create a \`.env\` file in the root directory:
-
-\`\`\`env
-# Server Configuration
-PORT=3000
-NODE_ENV=development
-
-# Database Configuration (if applicable)
-# DATABASE_URL=your_database_url
-
-# API Configuration
-API_VERSION=${parsedSpec?.info?.version || '1.0.0'}
-\`\`\`
-
-## 🚀 Deployment
-
-### Using Node.js
-
-1. Build the application (if TypeScript):
-   \`\`\`bash
-   ${runtime === 'bun' ? 'bun run build' : 'npm run build'}
-   \`\`\`
-
-2. Start the production server:
-   \`\`\`bash
-   ${runtime === 'bun' ? 'bun start' : 'npm start'}
-   \`\`\`
-
-### Using Docker
-
-\`\`\`dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-${typescript ? 'RUN npm run build' : ''}
-EXPOSE 3000
-CMD ["npm", "start"]
-\`\`\`
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests and linting
-5. Submit a pull request
-
-## 📝 License
-
-This project is licensed under the MIT License.
-
----
-
-*Generated by AutoBackend.ai*
-`,
-    });
-    if (typescript) {
-      newSampleFiles.push({
-        id: 'tsconfig.json',
-        name: 'tsconfig.json',
-        type: 'file' as 'file',
-        content: JSON.stringify(
-          {
-            compilerOptions: {
-              target: 'ES2022',
-              module: 'ESNext',
-              moduleResolution: 'node',
-              esModuleInterop: true,
-              allowSyntheticDefaultImports: true,
-              strict: true,
-              skipLibCheck: true,
-              forceConsistentCasingInFileNames: true,
-              outDir: './dist',
-              rootDir: './src',
-              declaration: true,
-              declarationMap: true,
-              sourceMap: true,
-              resolveJsonModule: true,
-              isolatedModules: true,
-              noEmitOnError: true,
-              incremental: true,
-              tsBuildInfoFile: './dist/.tsbuildinfo',
-            },
-            include: ['src/**/*'],
-            exclude: ['node_modules', 'dist', '**/*.test.ts', '**/*.spec.ts'],
-            ts_node: {
-              esm: true,
-            },
-          },
-          null,
-          2
-        ),
-      });
-    }
-
-    // Add .gitignore
-    newSampleFiles.push({
-      id: 'gitignore',
-      name: '.gitignore',
-      type: 'file',
-      content: `# Dependencies
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-.pnpm-debug.log*
-
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage directory used by tools like istanbul
-coverage/
-*.lcov
-
-# nyc test coverage
-.nyc_output
-
-# Grunt intermediate storage
-.grunt
-
-# Bower dependency directory
-bower_components
-
-# node-waf configuration
-.lock-wscript
-
-# Compiled binary addons
-build/Release
-
-# Dependency directories
-node_modules/
-jspm_packages/
-
-# TypeScript cache
-*.tsbuildinfo
-
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
-.eslintcache
-
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# dotenv environment variables file
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# parcel-bundler cache
-.cache
-.parcel-cache
-
-# Next.js build output
-.next
-out
-
-# Nuxt.js build / generate output
-.nuxt
-dist
-
-# Gatsby files
-.cache/
-public
-
-# Storybook build outputs
-.out
-.storybook-out
-
-# Temporary folders
-tmp/
-temp/
-
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
-
-# Directory for instrumented libs generated by jscoverage/JSCover
-lib-cov
-
-# Coverage directory used by tools like istanbul
-coverage
-*.lcov
-
-# nyc test coverage
-.nyc_output
-
-# Grunt intermediate storage
-.grunt
-
-# Bower dependency directory
-bower_components
-
-# node-waf configuration
-.lock-wscript
-
-# Compiled binary addons
-build/Release
-
-# Dependency directories
-node_modules/
-jspm_packages/
-
-# Snowpack dependency directory
-web_modules/
-
-# TypeScript cache
-*.tsbuildinfo
-
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
-.eslintcache
-
-# Microbundle cache
-.rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
-
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# dotenv environment variables file
-.env
-.env.test
-
-# parcel-bundler cache
-.cache
-.parcel-cache
-
-# Next.js build output
-.next
-
-# Nuxt.js build / generate output
-.nuxt
-dist
-
-# Gatsby files
-.cache/
-public
-
-# Storybook build outputs
-.out
-.storybook-out
-
-# Rollup.js default build output
-dist/
-
-# Uncomment the public line in if your project uses Gatsby and not Next.js
-# public
-
-# vuepress build output
-.vuepress/dist
-
-# Serverless directories
-.serverless/
-
-# FuseBox cache
-.fusebox/
-
-# DynamoDB Local files
-.dynamodb/
-
-# TernJS port file
-.tern-port
-
-# Stores VSCode versions used for testing VSCode extensions
-.vscode-test
-
-# yarn v2
-.yarn/cache
-.yarn/unplugged
-.yarn/build-state.yml
-.yarn/install-state.gz
-.pnp.*
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-`,
-    });
-
-    // Add .env.example
-    newSampleFiles.push({
-      id: 'env-example',
-      name: '.env.example',
-      type: 'file',
-      content: `# Server Configuration
-PORT=3000
-NODE_ENV=development
-
-# API Configuration
-API_VERSION=${parsedSpec?.info?.version || '1.0.0'}
-API_TITLE=${parsedSpec?.info?.title || 'Generated API'}
-
-# Database Configuration (uncomment and configure as needed)
-# DATABASE_URL=postgresql://username:password@localhost:5432/database_name
-# MONGODB_URI=mongodb://localhost:27017/database_name
-# REDIS_URL=redis://localhost:6379
-
-# Authentication (if applicable)
-# JWT_SECRET=your-super-secret-jwt-key
-# JWT_EXPIRES_IN=7d
-
-# External APIs (if applicable)
-# EXTERNAL_API_KEY=your-api-key
-# EXTERNAL_API_URL=https://api.example.com
-
-# Logging
-LOG_LEVEL=info
-
-# CORS Configuration
-CORS_ORIGIN=*
-
-# Rate Limiting
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=100
-`,
-    });
-
-    setGeneratedBackend({
-      files: newSampleFiles,
-      documentation: generateDocs ? generatedDocumentation : [],
-    });
-
-    if (newSampleFiles.length > 0) {
-      const findFirstFile = (
-        nodes: FileSystemNode[]
-      ): FileSystemNode | null => {
-        for (const node of nodes) {
-          if (node.type === 'file') return node;
-          if (node.children) {
-            const found = findFirstFile(node.children);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-      setSelectedFile(findFirstFile(newSampleFiles));
-    }
-    
-    setIsGenerating(false);
   };
+
+  // The old implementation has been removed.
+  // The new implementation now uses the /generate API endpoint via axios
+  // and the response will set the generatedBackend state and handle file selection.
 
   // Remove auto-generation on mount to allow for proper demo
   // useEffect(() => {
@@ -1169,7 +246,7 @@ RATE_LIMIT_MAX_REQUESTS=100
         alert('Download functionality requires the JSZip package. Please ensure it is properly installed.');
         return;
       }
-      
+
       const zip = new JSZip();
       console.log('Starting to add files to zip...');
 
@@ -1225,11 +302,11 @@ RATE_LIMIT_MAX_REQUESTS=100
       document.body.appendChild(link);
       console.log('Triggering download...');
       link.click();
-      
+
       console.log('Download triggered successfully');
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-    
+
     } catch (error) {
       console.error('Error creating zip file:', error);
       alert('Failed to create zip file. Please try again.');
@@ -1464,7 +541,7 @@ RATE_LIMIT_MAX_REQUESTS=100
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mb-4"></div>
               <h3 className="text-lg font-semibold mb-2">Generating Your Backend...</h3>
               <p className="text-muted-foreground text-center max-w-md">
-                Please wait while we create your custom backend based on your API specification. 
+                Please wait while we create your custom backend based on your API specification.
                 This may take a few moments.
               </p>
             </CardContent>
@@ -1557,7 +634,7 @@ RATE_LIMIT_MAX_REQUESTS=100
                     Project Structure
                   </h3>
                   {generatedBackend?.files &&
-                  generatedBackend.files.length > 0 ? (
+                    generatedBackend.files.length > 0 ? (
                     <div className="bg-background border rounded-md p-3 max-h-[400px] overflow-auto">
                       <FileTree
                         nodes={generatedBackend.files}
@@ -1578,92 +655,100 @@ RATE_LIMIT_MAX_REQUESTS=100
                   <h3 className="text-lg font-semibold mb-2">
                     API Documentation
                   </h3>
-                  {generatedBackend?.documentation &&
-                  generatedBackend.documentation.length > 0 ? (
-                    <div className="space-y-4">
-                      {generatedBackend.documentation.map(
-                        (endpoint: any, index: number) => (
-                          <div
-                            key={index}
-                            className="border p-3 rounded-md bg-background"
-                          >
-                            <h4 className="font-semibold text-md">
-                              {endpoint.path}
-                            </h4>
-                            <p className="text-sm text-muted-foreground mb-1">
-                              {endpoint.description}
-                            </p>
-                            {endpoint.methods.map(
-                              (method: any, mIndex: number) => (
-                                <div
-                                  key={mIndex}
-                                  className="ml-2 mt-1 border-l-2 pl-2 border-blue-500"
-                                >
-                                  <span
-                                    className={
-                                      HTTP_METHOD_COLORS[
-                                        method.method as keyof typeof HTTP_METHOD_COLORS
-                                      ] || 'bg-gray-100 text-gray-700'
-                                    }
+                  {
+                    generatedBackend?.documentationMarkdown ? (
+                      <div className="border p-3 rounded-md bg-background prose prose-sm max-w-none">
+                        <div dangerouslySetInnerHTML={{ 
+                          __html: marked.parse(generatedBackend.documentationMarkdown) 
+                        }} />
+                      </div>
+                    ) :
+                    generatedBackend?.documentation &&
+                      generatedBackend.documentation.length > 0 ? (
+                      <div className="space-y-4">
+                        {generatedBackend.documentation.map(
+                          (endpoint: any, index: number) => (
+                            <div
+                              key={index}
+                              className="border p-3 rounded-md bg-background"
+                            >
+                              <h4 className="font-semibold text-md">
+                                {endpoint.path}
+                              </h4>
+                              <p className="text-sm text-muted-foreground mb-1">
+                                {endpoint.description}
+                              </p>
+                              {endpoint.methods.map(
+                                (method: any, mIndex: number) => (
+                                  <div
+                                    key={mIndex}
+                                    className="ml-2 mt-1 border-l-2 pl-2 border-blue-500"
                                   >
-                                    {method.method}
-                                  </span>
-                                  <span className="ml-2 text-sm">
-                                    {method.summary}
-                                  </span>
-                                  {method.requestBody && (
-                                    <div className="mt-1 pl-2 text-xs">
-                                      <strong>
-                                        {UI_TEXT.REQUEST_BODY_LABEL}
-                                      </strong>{' '}
-                                      {method.requestBody.description}
-                                      {method.requestBody.content && (
-                                        <pre className="mt-1 p-1 bg-muted/50 rounded text-xs overflow-auto">
-                                          {JSON.stringify(
-                                            method.requestBody.content,
-                                            null,
-                                            2
-                                          )}
-                                        </pre>
-                                      )}
-                                    </div>
-                                  )}
-                                  {method.responses && (
-                                    <div className="mt-1 pl-2 text-xs">
-                                      <strong>{UI_TEXT.RESPONSES_LABEL}</strong>
-                                      {Object.entries(method.responses).map(
-                                        ([status, resp]: [string, any]) => (
-                                          <div key={status} className="mt-0.5">
-                                            <span className="font-medium">
-                                              {status}:
-                                            </span>{' '}
-                                            {resp.description}
-                                            {resp.content && (
-                                              <pre className="mt-1 p-1 bg-muted/50 rounded text-xs overflow-auto">
-                                                {JSON.stringify(
-                                                  resp.content,
-                                                  null,
-                                                  2
-                                                )}
-                                              </pre>
+                                    <span
+                                      className={
+                                        HTTP_METHOD_COLORS[
+                                        method.method as keyof typeof HTTP_METHOD_COLORS
+                                        ] || 'bg-gray-100 text-gray-700'
+                                      }
+                                    >
+                                      {method.method}
+                                    </span>
+                                    <span className="ml-2 text-sm">
+                                      {method.summary}
+                                    </span>
+                                    {method.requestBody && (
+                                      <div className="mt-1 pl-2 text-xs">
+                                        <strong>
+                                          {UI_TEXT.REQUEST_BODY_LABEL}
+                                        </strong>{' '}
+                                        {method.requestBody.description}
+                                        {method.requestBody.content && (
+                                          <pre className="mt-1 p-1 bg-muted/50 rounded text-xs overflow-auto">
+                                            {JSON.stringify(
+                                              method.requestBody.content,
+                                              null,
+                                              2
                                             )}
-                                          </div>
-                                        )
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              )
-                            )}
-                          </div>
-                        )
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-muted-foreground">
-                      {UI_TEXT.GENERATE_DOCS_MESSAGE}
-                    </p>
-                  )}
+                                          </pre>
+                                        )}
+                                      </div>
+                                    )}
+                                    {method.responses && (
+                                      <div className="mt-1 pl-2 text-xs">
+                                        <strong>{UI_TEXT.RESPONSES_LABEL}</strong>
+                                        {Object.entries(method.responses).map(
+                                          ([status, resp]: [string, any]) => (
+                                            <div key={status} className="mt-0.5">
+                                              <span className="font-medium">
+                                                {status}:
+                                              </span>{' '}
+                                              {resp.description}
+                                              {resp.content && (
+                                                <pre className="mt-1 p-1 bg-muted/50 rounded text-xs overflow-auto">
+                                                  {JSON.stringify(
+                                                    resp.content,
+                                                    null,
+                                                    2
+                                                  )}
+                                                </pre>
+                                              )}
+                                            </div>
+                                          )
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          )
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground">
+                        {UI_TEXT.GENERATE_DOCS_MESSAGE}
+                      </p>
+                    )}
                 </TabsContent>
               </Tabs>
             </CardContent>
